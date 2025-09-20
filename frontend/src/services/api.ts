@@ -1,5 +1,6 @@
 import axios, { type AxiosInstance, type AxiosResponse, type AxiosError } from "axios";
 import { useAuthStore } from "../stores/auth";
+import type { Budget, CreateBudgetDto } from "../types";
 
 // API base configuration
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api";
@@ -94,11 +95,14 @@ export const apiService = {
 
   // Budget endpoints
   budgets: {
-    getAll: () => api.get<ApiResponse<any[]>>("/budgets"),
+    getAll: () => api.get<ApiResponse<Budget[]>>("/budgets"),
 
-    create: (budget: any) => api.post<ApiResponse<any>>("/budgets", budget),
+    create: (budget: CreateBudgetDto) => api.post<ApiResponse<Budget>>("/budgets", budget),
 
-    update: (id: string, budget: any) => api.put<ApiResponse<any>>(`/budgets/${id}`, budget),
+    update: (id: string, budget: Partial<CreateBudgetDto>) => api.put<ApiResponse<Budget>>(`/budgets/${id}`, budget),
+
+    getProgress: (params?: { month?: number; year?: number }) =>
+      api.get<ApiResponse<any>>("/budgets/progress", { params }),
   },
 
   // Dashboard endpoints
@@ -125,7 +129,7 @@ export const apiService = {
     getExpenses: (groupId: string) => api.get<ApiResponse<any[]>>(`/groups/${groupId}/expenses`),
 
     createExpense: (groupId: string, expense: any) =>
-      api.post<ApiResponse<any>>(`/groups/${groupId}/expenses`, expense),
+      api.post<ApiResponse<unknown>>(`/groups/${groupId}/expenses`, expense),
 
     getBalances: (groupId: string) => api.get<ApiResponse<unknown>>(`/groups/${groupId}/balances`),
 

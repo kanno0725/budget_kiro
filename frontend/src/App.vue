@@ -12,11 +12,11 @@ onMounted(() => {
 </script>
 
 <template>
-  <div id="app">
+  <v-app>
     <AppLayout>
       <router-view />
     </AppLayout>
-  </div>
+  </v-app>
 </template>
 
 <style>

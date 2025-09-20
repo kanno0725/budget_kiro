@@ -1,43 +1,135 @@
 <template>
-  <div class="min-h-screen bg-gray-50">
-    <div class="container mx-auto px-4 py-8">
-      <!-- Page Header -->
-      <div class="flex justify-between items-center mb-6">
-        <h1 class="text-2xl font-bold text-gray-900">予算管理</h1>
-        <button class="btn-primary">
-          <span class="mr-2">+</span>
-          新しい予算
-        </button>
-      </div>
-
-      <!-- Coming Soon Message -->
-      <div class="card text-center py-12">
-        <div class="text-6xl mb-4">📊</div>
-        <h2 class="text-2xl font-semibold text-gray-900 mb-2">予算管理機能</h2>
-        <p class="text-gray-600 mb-6">
-          カテゴリ別の予算設定と実績比較機能を準備中です
-        </p>
-        <div class="text-sm text-gray-500">
-          実装予定の機能：
-          <ul class="mt-2 space-y-1">
-            <li>• カテゴリ別予算設定</li>
-            <li>• 予算vs実績の比較</li>
-            <li>• 予算超過アラート</li>
-            <li>• 月次・年次予算計画</li>
-          </ul>
+  <v-container fluid class="pa-6">
+    <!-- Page Header -->
+    <v-row class="mb-6">
+      <v-col>
+        <div class="d-flex justify-space-between align-center">
+          <h1 class="text-h3 font-weight-bold">予算管理</h1>
+          <v-btn
+            @click="showBudgetForm = true"
+            color="primary"
+            variant="elevated"
+            prepend-icon="mdi-plus"
+          >
+            新しい予算
+          </v-btn>
         </div>
-      </div>
-    </div>
-  </div>
+      </v-col>
+    </v-row>
+
+    <!-- Budget Alerts -->
+    <v-row class="mb-6">
+      <v-col>
+        <BudgetAlertsVuetify
+          @view-category="handleViewCategory"
+          @edit-budget="handleEditBudget"
+        />
+      </v-col>
+    </v-row>
+
+    <!-- Budget Form Dialog -->
+    <v-dialog
+      v-model="showBudgetForm"
+      max-width="600px"
+      persistent
+    >
+      <BudgetForm
+        :budget="editingBudget"
+        :show-close-button="true"
+        @close="closeBudgetForm"
+        @cancel="closeBudgetForm"
+        @success="handleBudgetSuccess"
+      />
+    </v-dialog>
+
+    <!-- Main Content Grid -->
+    <v-row>
+      <!-- Budget Progress -->
+      <v-col cols="12" lg="6">
+        <BudgetProgress
+          @create-budget="showBudgetForm = true"
+          @edit-budget="handleEditBudget"
+        />
+      </v-col>
+
+      <!-- Budget Comparison Chart -->
+      <v-col cols="12" lg="6">
+        <BudgetComparisonChart
+          @create-budget="showBudgetForm = true"
+        />
+      </v-col>
+    </v-row>
+
+    <!-- Error Message -->
+    <v-row v-if="error" class="mt-6">
+      <v-col>
+        <v-alert
+          type="error"
+          variant="tonal"
+          closable
+          @click:close="clearError"
+        >
+          <template #title>エラーが発生しました</template>
+          {{ error }}
+        </v-alert>
+      </v-col>
+    </v-row>
+  </v-container>
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useBudgets } from '../composables/useBudgets'
+import BudgetForm from '../components/budget/BudgetForm.vue'
+import BudgetProgress from '../components/budget/BudgetProgress.vue'
+import BudgetAlertsVuetify from '../components/budget/BudgetAlertsVuetify.vue'
+import BudgetComparisonChart from '../components/budget/BudgetComparisonChart.vue'
+import type { Budget } from '../types'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const { error, clearError, budgets } = useBudgets()
+
+// Local state
+const showBudgetForm = ref(false)
+const editingBudget = ref<Budget | undefined>(undefined)
+
+// Handle budget form actions
+const closeBudgetForm = () => {
+  showBudgetForm.value = false
+  editingBudget.value = undefined
+}
+
+const handleBudgetSuccess = (budget: Budget) => {
+  closeBudgetForm()
+  // The budget store will automatically update the budgets list
+}
+
+const handleEditBudget = (category: string) => {
+  const currentMonth = new Date().getMonth() + 1
+  const currentYear = new Date().getFullYear()
+
+  const budget = budgets.value.find(b =>
+    b.category === category &&
+    b.month === currentMonth &&
+    b.year === currentYear
+  )
+
+  if (budget) {
+    editingBudget.value = budget
+    showBudgetForm.value = true
+  }
+}
+
+const handleViewCategory = (category: string) => {
+  // Navigate to transactions view with category filter
+  router.push({
+    name: 'transactions',
+    query: { category }
+  })
+}
 
 onMounted(() => {
   // Redirect to login if not authenticated

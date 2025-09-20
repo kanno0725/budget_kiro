@@ -39,7 +39,7 @@ describe('AuthStatus', () => {
       email: 'test@example.com',
       name: 'Test User'
     }
-    authStore.token = 'mock-token'
+    authStore.accessToken = 'mock-token'
     authStore.lastActivity = Date.now()
 
     const wrapper = mount(AuthStatus, {

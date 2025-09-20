@@ -1,29 +1,29 @@
 <template>
-  <div class="min-h-screen bg-gray-50">
+  <v-layout>
     <!-- Navigation -->
-    <AppNavigation v-if="showNavigation" />
+    <AppNavigationVuetify v-if="showNavigation" />
 
     <!-- Main Content -->
-    <main :class="{ 'pt-0': !showNavigation }">
+    <v-main>
       <slot />
-    </main>
+    </v-main>
 
     <!-- Footer (optional) -->
-    <footer v-if="showNavigation" class="bg-white border-t mt-auto">
-      <div class="container mx-auto px-4 py-6">
-        <div class="text-center text-gray-600 text-sm">
+    <v-footer v-if="showNavigation" app class="bg-surface">
+      <div class="text-center w-100">
+        <span class="text-body-2 text-medium-emphasis">
           © 2024 家計簿アプリ. All rights reserved.
-        </div>
+        </span>
       </div>
-    </footer>
-  </div>
+    </v-footer>
+  </v-layout>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
-import AppNavigation from './AppNavigation.vue'
+import AppNavigationVuetify from './AppNavigationVuetify.vue'
 
 const route = useRoute()
 const authStore = useAuthStore()

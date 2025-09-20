@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
+import vuetify from './plugins/vuetify'
 import './assets/main.css'
 
 // Import routes and guards
@@ -23,6 +24,7 @@ const app = createApp(App)
 
 app.use(pinia)
 app.use(router)
+app.use(vuetify)
 
 // Initialize auth store and set up router guards
 const authStore = useAuthStore()

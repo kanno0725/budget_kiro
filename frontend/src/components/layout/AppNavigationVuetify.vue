@@ -29,12 +29,18 @@
 
     <!-- User Menu -->
     <div class="d-flex align-center ml-4">
-      <span class="text-body-2 mr-3 d-none d-md-block"> {{ authStore.user?.name }}さん </span>
+      <span class="text-body-2 mr-3 d-none d-md-block">
+        {{ authStore.user?.name }}さん
+      </span>
 
       <!-- User Menu Button -->
       <v-menu>
         <template #activator="{ props }">
-          <v-btn v-bind="props" icon variant="text">
+          <v-btn
+            v-bind="props"
+            icon
+            variant="text"
+          >
             <v-avatar color="primary" size="32">
               <span class="text-white font-weight-medium">
                 {{ userInitials }}
@@ -66,11 +72,19 @@
     </div>
 
     <!-- Mobile Navigation Drawer Toggle -->
-    <v-app-bar-nav-icon class="d-md-none" @click="drawer = !drawer" />
+    <v-app-bar-nav-icon
+      class="d-md-none"
+      @click="drawer = !drawer"
+    />
   </v-app-bar>
 
   <!-- Mobile Navigation Drawer -->
-  <v-navigation-drawer v-model="drawer" temporary location="right" class="d-md-none">
+  <v-navigation-drawer
+    v-model="drawer"
+    temporary
+    location="right"
+    class="d-md-none"
+  >
     <v-list>
       <v-list-item
         v-for="item in navigationItems"
@@ -97,55 +111,55 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from "vue";
-import { useRouter } from "vue-router";
-import { useAuthStore } from "../../stores/auth";
+import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '../../stores/auth'
 
-const router = useRouter();
-const authStore = useAuthStore();
+const router = useRouter()
+const authStore = useAuthStore()
 
-const drawer = ref(false);
+const drawer = ref(false)
 
 // Navigation items
 const navigationItems = [
   {
-    name: "dashboard",
-    to: "/dashboard",
-    title: "ダッシュボード",
-    icon: "mdi-view-dashboard",
+    name: 'dashboard',
+    title: 'ダッシュボード',
+    to: '/dashboard',
+    icon: 'mdi-view-dashboard'
   },
   {
-    name: "transactions",
-    to: "/transactions",
-    title: "取引管理",
-    icon: "mdi-cash-multiple",
+    name: 'transactions',
+    title: '取引管理',
+    to: '/transactions',
+    icon: 'mdi-currency-jpy'
   },
   {
-    name: "budget",
-    to: "/budget",
-    title: "予算管理",
-    icon: "mdi-chart-line",
+    name: 'budget',
+    title: '予算管理',
+    to: '/budget',
+    icon: 'mdi-chart-line'
   },
   {
-    name: "groups",
-    to: "/groups",
-    title: "グループ",
-    icon: "mdi-account-group",
-  },
-];
+    name: 'groups',
+    title: 'グループ',
+    to: '/groups',
+    icon: 'mdi-account-group'
+  }
+]
 
 const userInitials = computed(() => {
-  if (!authStore.user?.name) return "U";
+  if (!authStore.user?.name) return 'U'
   return authStore.user.name
-    .split(" ")
-    .map((name) => name.charAt(0))
-    .join("")
+    .split(' ')
+    .map(name => name.charAt(0))
+    .join('')
     .toUpperCase()
-    .slice(0, 2);
-});
+    .slice(0, 2)
+})
 
 const handleLogout = async () => {
-  await authStore.logout();
-  router.push("/login");
-};
+  await authStore.logout()
+  router.push('/login')
+}
 </script>
