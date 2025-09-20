@@ -7,6 +7,7 @@ import { TransactionsModule } from './modules/transactions/transactions.module';
 import { BudgetsModule } from './modules/budgets/budgets.module';
 import { GroupsModule } from './modules/groups/groups.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { ExportModule } from './modules/export/export.module';
 import { AppController } from './app.controller';
 import { LoggerMiddleware } from './common/middleware/logger.middleware';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -23,6 +24,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
     BudgetsModule,
     GroupsModule,
     DashboardModule,
+    ExportModule,
   ],
   controllers: [AppController],
   providers: [
