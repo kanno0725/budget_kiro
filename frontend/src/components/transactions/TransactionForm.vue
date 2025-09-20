@@ -235,7 +235,7 @@ const validationRules = {
 }
 
 const formRef = ref(form)
-const { errors, validateField, validateForm, clearErrors } = useFormValidation(formRef, validationRules)
+const { errors, validateForm, clearErrors } = useFormValidation(formRef, validationRules)
 
 // Watch for type changes to reset category
 watch(() => form.type, () => {

@@ -64,7 +64,7 @@ export const useAuthStore = defineStore('auth', () => {
         return false
       }
     } catch (err: unknown) {
-      error.value = (err as unknown).response?.data?.error?.message || 'Registration failed'
+      error.value = (err as unknown)?.response?.data?.error?.message || 'Registration failed'
       return false
     } finally {
       isLoading.value = false

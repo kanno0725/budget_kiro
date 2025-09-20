@@ -248,7 +248,7 @@ export const useGroupsStore = defineStore('groups', () => {
         error.value = response.data.error?.message || 'Failed to fetch settlements'
       }
     } catch (err: unknown) {
-      error.value = err.response?.data?.error?.message || 'Failed to fetch settlements'
+      error.value = (err as unknown)?.response?.data?.error?.message || 'Failed to fetch settlements'
     } finally {
       isLoading.value = false
     }

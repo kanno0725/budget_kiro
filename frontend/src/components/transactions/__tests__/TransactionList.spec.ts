@@ -1,7 +1,16 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import TransactionList from '../TransactionList.vue'
 import TransactionItem from '../TransactionItem.vue'
+
+// Mock the stores
+vi.mock('../../../stores/transactions', () => ({
+  useTransactionsStore: vi.fn(() => ({
+    deleteTransaction: vi.fn().mockResolvedValue(true),
+    error: null
+  }))
+}))
 
 // Mock TransactionItem component
 vi.mock('../TransactionItem.vue', () => ({
@@ -14,6 +23,9 @@ vi.mock('../TransactionItem.vue', () => ({
 }))
 
 describe('TransactionList', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
   const mockTransactions = [
     {
       id: '1',
