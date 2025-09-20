@@ -1,8 +1,12 @@
 import { Module } from '@nestjs/common';
 import { GroupsController } from './groups.controller';
+import { GroupsService } from './groups.service';
+import { PrismaModule } from '../../database/prisma.module';
 
 @Module({
+  imports: [PrismaModule],
   controllers: [GroupsController],
-  // Will be implemented in tasks 6-8
+  providers: [GroupsService],
+  exports: [GroupsService]
 })
 export class GroupsModule {}
