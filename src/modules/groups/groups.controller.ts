@@ -23,6 +23,8 @@ import { GroupsService } from "./groups.service";
 import { CreateGroupDto } from "./dto/create-group.dto";
 import { JoinGroupDto } from "./dto/join-group.dto";
 import { UpdateMemberRoleDto } from "./dto/update-member-role.dto";
+import { CreateSharedExpenseDto } from "./dto/create-shared-expense.dto";
+import { SplitEquallyDto } from "./dto/split-equally.dto";
 
 @ApiTags("Groups")
 @ApiBearerAuth("JWT-auth")
@@ -260,5 +262,174 @@ export class GroupsController {
       data: result,
       message: "Invite code regenerated successfully",
     });
+  }
+
+  @Post(":id/expenses")
+  @ApiOperation({ summary: "Create a shared expense" })
+  @ApiParam({ name: "id", description: "Group ID" })
+  @ApiBody({ type: CreateSharedExpenseDto })
+  @ApiResponse({
+    status: 201,
+    description: "Shared expense created successfully",
+    schema: {
+      example: {
+        success: true,
+        data: {
+          id: "expense_id",
+          amount: 100.00,
+          description: "Dinner at restaurant",
+          date: "2024-01-15T19:30:00.000Z",
+          payerId: "user_id",
+          groupId: "group_id",
+          payer: {
+            id: "user_id",
+            name: "John Doe",
+            email: "john@example.com"
+          },
+          splits: [
+            {
+              id: "split_id",
+              userId: "user_id",
+              amount: 50.00
+            }
+          ]
+        }
+      }
+    }
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Invalid expense data or split configuration"
+  })
+  async createSharedExpense(
+    @Param("id") id: string,
+    @Body() createSharedExpenseDto: CreateSharedExpenseDto,
+    @Request() req
+  ) {
+    const expense = await this.groupsService.createSharedExpense(
+      id,
+      createSharedExpenseDto,
+      req.user.id
+    );
+    return {
+      success: true,
+      data: expense,
+      message: "Shared expense created successfully"
+    };
+  }
+
+  @Get(":id/expenses")
+  @ApiOperation({ summary: "Get all shared expenses for a group" })
+  @ApiParam({ name: "id", description: "Group ID" })
+  @ApiResponse({
+    status: 200,
+    description: "Shared expenses retrieved successfully"
+  })
+  async getSharedExpenses(@Param("id") id: string, @Request() req) {
+    const expenses = await this.groupsService.getSharedExpenses(id, req.user.id);
+    return {
+      success: true,
+      data: expenses
+    };
+  }
+
+  @Get(":id/expenses/:expenseId")
+  @ApiOperation({ summary: "Get shared expense by ID" })
+  @ApiParam({ name: "id", description: "Group ID" })
+  @ApiParam({ name: "expenseId", description: "Expense ID" })
+  @ApiResponse({
+    status: 200,
+    description: "Shared expense retrieved successfully"
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Shared expense not found or access denied"
+  })
+  async getSharedExpenseById(
+    @Param("id") id: string,
+    @Param("expenseId") expenseId: string,
+    @Request() req
+  ) {
+    const expense = await this.groupsService.getSharedExpenseById(
+      expenseId,
+      req.user.id
+    );
+    return {
+      success: true,
+      data: expense
+    };
+  }
+
+  @Get(":id/balances")
+  @ApiOperation({ summary: "Get member balances for a group" })
+  @ApiParam({ name: "id", description: "Group ID" })
+  @ApiResponse({
+    status: 200,
+    description: "Group balances retrieved successfully",
+    schema: {
+      example: {
+        success: true,
+        data: [
+          {
+            id: "balance_id",
+            userId: "user_id",
+            groupId: "group_id",
+            balance: 25.50,
+            user: {
+              id: "user_id",
+              name: "John Doe",
+              email: "john@example.com"
+            }
+          }
+        ]
+      }
+    }
+  })
+  async getGroupBalances(@Param("id") id: string, @Request() req) {
+    const balances = await this.groupsService.getGroupBalances(id, req.user.id);
+    return {
+      success: true,
+      data: balances
+    };
+  }
+
+  @Post(":id/split-equally")
+  @ApiOperation({ summary: "Perform equal split settlement (Admin only)" })
+  @ApiParam({ name: "id", description: "Group ID" })
+  @ApiBody({ type: SplitEquallyDto })
+  @ApiResponse({
+    status: 200,
+    description: "Equal split settlement completed successfully"
+  })
+  @ApiResponse({
+    status: 403,
+    description: "Only group admins can perform settlements"
+  })
+  async splitEqually(
+    @Param("id") id: string,
+    @Body() splitEquallyDto: SplitEquallyDto,
+    @Request() req
+  ) {
+    const result = await this.groupsService.splitEqually(
+      id,
+      splitEquallyDto,
+      req.user.id
+    );
+    return result;
+  }
+
+  @Get(":id/settlements")
+  @ApiOperation({ summary: "Get settlement history for a group" })
+  @ApiParam({ name: "id", description: "Group ID" })
+  @ApiResponse({
+    status: 200,
+    description: "Settlement history retrieved successfully"
+  })
+  async getSettlements(@Param("id") id: string, @Request() req) {
+    const settlements = await this.groupsService.getSettlements(id, req.user.id);
+    return {
+      success: true,
+      data: settlements
+    };
   }
 }

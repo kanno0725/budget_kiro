@@ -23,6 +23,7 @@ model User {
   groupMembers GroupMember[]
   paidExpenses SharedExpense[] @relation("Payer")
   settlements  Settlement[]
+  groupBalances GroupBalance[] @relation("UserBalance")
 
   @@map("users")
 }
@@ -66,6 +67,7 @@ model Group {
 
   members        GroupMember[]
   sharedExpenses SharedExpense[]
+  groupBalances  GroupBalance[] @relation("GroupBalance")
 
   @@map("groups")
 }
@@ -129,6 +131,9 @@ model GroupBalance {
   userId  String
   groupId String
   balance Decimal @default(0)
+
+  user  User  @relation("UserBalance", fields: [userId], references: [id], onDelete: Cascade)
+  group Group @relation("GroupBalance", fields: [groupId], references: [id], onDelete: Cascade)
 
   @@unique([userId, groupId])
   @@map("group_balances")

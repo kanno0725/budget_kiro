@@ -1,10 +1,13 @@
-import { Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { JoinGroupDto } from './dto/join-group.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
+import { CreateSharedExpenseDto, SplitType } from './dto/create-shared-expense.dto';
+import { SplitEquallyDto } from './dto/split-equally.dto';
 import { GroupRole } from '@prisma/client';
 import { randomBytes } from 'crypto';
+import { Decimal } from '@prisma/client/runtime/library';
 
 @Injectable()
 export class GroupsService {
@@ -355,6 +358,360 @@ export class GroupsService {
     });
 
     return { inviteCode: updatedGroup.inviteCode };
+  }
+
+  async createSharedExpense(groupId: string, createSharedExpenseDto: CreateSharedExpenseDto, userId: string) {
+    // Verify user has access to this group
+    await this.findOne(groupId, userId);
+
+    // Validate splits
+    await this.validateExpenseSplits(groupId, createSharedExpenseDto);
+
+    // Convert amount to Decimal
+    const totalAmount = new Decimal(createSharedExpenseDto.amount);
+
+    // Create shared expense with splits in a transaction
+    const result = await this.prisma.$transaction(async (prisma) => {
+      // Create the shared expense
+      const sharedExpense = await prisma.sharedExpense.create({
+        data: {
+          amount: totalAmount,
+          description: createSharedExpenseDto.description,
+          date: new Date(createSharedExpenseDto.date),
+          payerId: userId,
+          groupId: groupId
+        }
+      });
+
+      // Create expense splits
+      const splits = createSharedExpenseDto.splits.map(split => ({
+        expenseId: sharedExpense.id,
+        userId: split.userId,
+        amount: createSharedExpenseDto.splitType === SplitType.EQUAL 
+          ? totalAmount.div(createSharedExpenseDto.splits.length)
+          : new Decimal(split.amount!)
+      }));
+
+      await prisma.expenseSplit.createMany({
+        data: splits
+      });
+
+      // Update group balances
+      await this.updateGroupBalances(groupId, sharedExpense.id, prisma);
+
+      return sharedExpense;
+    });
+
+    // Return the created expense with splits
+    return this.getSharedExpenseById(result.id, userId);
+  }
+
+  async getSharedExpenses(groupId: string, userId: string) {
+    // Verify user has access to this group
+    await this.findOne(groupId, userId);
+
+    const expenses = await this.prisma.sharedExpense.findMany({
+      where: {
+        groupId
+      },
+      include: {
+        payer: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        },
+        splits: {
+          include: {
+            expense: false
+          }
+        }
+      },
+      orderBy: {
+        date: 'desc'
+      }
+    });
+
+    return expenses;
+  }
+
+  async getSharedExpenseById(expenseId: string, userId: string) {
+    const expense = await this.prisma.sharedExpense.findFirst({
+      where: {
+        id: expenseId,
+        group: {
+          members: {
+            some: {
+              userId
+            }
+          }
+        }
+      },
+      include: {
+        payer: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        },
+        splits: {
+          include: {
+            expense: false
+          }
+        },
+        group: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      }
+    });
+
+    if (!expense) {
+      throw new NotFoundException('Shared expense not found or access denied');
+    }
+
+    return expense;
+  }
+
+  async getGroupBalances(groupId: string, userId: string) {
+    // Verify user has access to this group
+    await this.findOne(groupId, userId);
+
+    const balances = await this.prisma.groupBalance.findMany({
+      where: {
+        groupId
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    // If no balances exist, create them for all group members
+    if (balances.length === 0) {
+      const members = await this.getMembers(groupId, userId);
+      const newBalances = await this.prisma.groupBalance.createMany({
+        data: members.map(member => ({
+          userId: member.userId,
+          groupId: groupId,
+          balance: new Decimal(0)
+        }))
+      });
+
+      return this.getGroupBalances(groupId, userId);
+    }
+
+    return balances;
+  }
+
+  async splitEqually(groupId: string, splitEquallyDto: SplitEquallyDto, userId: string) {
+    // Verify user has access to this group and is admin
+    const currentUserMember = await this.prisma.groupMember.findFirst({
+      where: {
+        groupId,
+        userId,
+        role: GroupRole.ADMIN
+      }
+    });
+
+    if (!currentUserMember) {
+      throw new ForbiddenException('Only group admins can perform equal split settlements');
+    }
+
+    // Validate that all user IDs are members of the group
+    const members = await this.getMembers(groupId, userId);
+    const memberIds = members.map(m => m.userId);
+    
+    for (const splitUserId of splitEquallyDto.userIds) {
+      if (!memberIds.includes(splitUserId)) {
+        throw new BadRequestException(`User ${splitUserId} is not a member of this group`);
+      }
+    }
+
+    // Get current balances for the specified users
+    const balances = await this.prisma.groupBalance.findMany({
+      where: {
+        groupId,
+        userId: {
+          in: splitEquallyDto.userIds
+        }
+      }
+    });
+
+    // Calculate total balance and equal share
+    const totalBalance = balances.reduce((sum, balance) => sum.add(balance.balance), new Decimal(0));
+    const equalShare = totalBalance.div(splitEquallyDto.userIds.length);
+
+    // Create settlements and update balances in a transaction
+    const result = await this.prisma.$transaction(async (prisma) => {
+      const settlements = [];
+
+      for (const balance of balances) {
+        const difference = balance.balance.sub(equalShare);
+        
+        if (!difference.equals(0)) {
+          // Update balance to equal share
+          await prisma.groupBalance.update({
+            where: {
+              id: balance.id
+            },
+            data: {
+              balance: equalShare
+            }
+          });
+
+          // Create settlement record
+          if (difference.gt(0)) {
+            // This user owes money to others
+            const settlement = await prisma.settlement.create({
+              data: {
+                fromId: balance.userId,
+                toId: userId, // Settlement coordinator (admin)
+                amount: difference,
+                groupId: groupId
+              }
+            });
+            settlements.push(settlement);
+          }
+        }
+      }
+
+      return settlements;
+    });
+
+    return {
+      success: true,
+      message: 'Equal split settlement completed successfully',
+      settlements: result,
+      equalShare: equalShare
+    };
+  }
+
+  async getSettlements(groupId: string, userId: string) {
+    // Verify user has access to this group
+    await this.findOne(groupId, userId);
+
+    const settlements = await this.prisma.settlement.findMany({
+      where: {
+        groupId
+      },
+      include: {
+        from: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    return settlements;
+  }
+
+  private async validateExpenseSplits(groupId: string, createSharedExpenseDto: CreateSharedExpenseDto) {
+    // Get group members
+    const members = await this.prisma.groupMember.findMany({
+      where: { groupId }
+    });
+    const memberIds = members.map(m => m.userId);
+
+    // Validate that all split user IDs are group members
+    for (const split of createSharedExpenseDto.splits) {
+      if (!memberIds.includes(split.userId)) {
+        throw new BadRequestException(`User ${split.userId} is not a member of this group`);
+      }
+    }
+
+    // For custom splits, validate that amounts sum to total
+    if (createSharedExpenseDto.splitType === SplitType.CUSTOM) {
+      const totalSplitAmount = createSharedExpenseDto.splits.reduce(
+        (sum, split) => sum.add(new Decimal(split.amount || 0)), 
+        new Decimal(0)
+      );
+
+      const totalAmount = new Decimal(createSharedExpenseDto.amount);
+      if (!totalSplitAmount.equals(totalAmount)) {
+        throw new BadRequestException('Split amounts must sum to the total expense amount');
+      }
+
+      // Ensure all splits have amounts for custom type
+      for (const split of createSharedExpenseDto.splits) {
+        if (split.amount === undefined || split.amount === null) {
+          throw new BadRequestException('Amount is required for each split when using custom split type');
+        }
+      }
+    }
+
+    // Validate no duplicate user IDs in splits
+    const splitUserIds = createSharedExpenseDto.splits.map(s => s.userId);
+    const uniqueUserIds = new Set(splitUserIds);
+    if (splitUserIds.length !== uniqueUserIds.size) {
+      throw new BadRequestException('Duplicate user IDs found in splits');
+    }
+  }
+
+  private async updateGroupBalances(groupId: string, expenseId: string, prisma: any) {
+    // Get the expense with splits
+    const expense = await prisma.sharedExpense.findUnique({
+      where: { id: expenseId },
+      include: { splits: true }
+    });
+
+    // Update balances for each split
+    for (const split of expense.splits) {
+      // Upsert group balance
+      await prisma.groupBalance.upsert({
+        where: {
+          userId_groupId: {
+            userId: split.userId,
+            groupId: groupId
+          }
+        },
+        update: {
+          balance: {
+            decrement: split.amount
+          }
+        },
+        create: {
+          userId: split.userId,
+          groupId: groupId,
+          balance: split.amount.neg()
+        }
+      });
+    }
+
+    // Update payer's balance (they paid the full amount)
+    await prisma.groupBalance.upsert({
+      where: {
+        userId_groupId: {
+          userId: expense.payerId,
+          groupId: groupId
+        }
+      },
+      update: {
+        balance: {
+          increment: expense.amount
+        }
+      },
+      create: {
+        userId: expense.payerId,
+        groupId: groupId,
+        balance: expense.amount
+      }
+    });
   }
 
   private generateInviteCode(): string {
