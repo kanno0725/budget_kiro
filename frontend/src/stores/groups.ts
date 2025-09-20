@@ -243,11 +243,11 @@ export const useGroupsStore = defineStore('groups', () => {
       const response = await apiService.groups.getSettlements(groupId)
 
       if (response.data.success && response.data.data) {
-        settlements.value = response.data.data
+        settlements.value = response.data.data as Settlement[]
       } else {
         error.value = response.data.error?.message || 'Failed to fetch settlements'
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       error.value = err.response?.data?.error?.message || 'Failed to fetch settlements'
     } finally {
       isLoading.value = false
