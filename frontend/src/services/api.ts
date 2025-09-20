@@ -75,6 +75,8 @@ export const apiService = {
       api.post<ApiResponse<{ user: any; token: string }>>('/auth/register', userData),
 
     logout: () => api.post<ApiResponse>('/auth/logout'),
+
+    me: () => api.get<ApiResponse<any>>('/auth/me'),
   },
 
   // Transaction endpoints
@@ -138,7 +140,7 @@ export const apiService = {
       api.post<ApiResponse>(`/groups/${groupId}/split-equally`),
 
     getSettlements: (groupId: string) =>
-      api.get<ApiResponse<any[]>>(`/groups/${groupId}/settlements`),
+      api.get<ApiResponse<unknown[]>>(`/groups/${groupId}/settlements`),
   },
 
   // Export endpoints

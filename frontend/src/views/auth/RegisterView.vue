@@ -17,8 +17,15 @@
             type="text"
             required
             class="form-input"
+            :class="{ 'border-red-500 focus:border-red-500': hasFieldError('name') }"
             placeholder="山田太郎"
+            @blur="handleFieldBlur('name')"
           />
+          <div v-if="hasFieldError('name')" class="mt-1 text-sm text-red-600">
+            <div v-for="error in getFieldErrors('name')" :key="error">
+              {{ error }}
+            </div>
+          </div>
         </div>
 
         <div>
@@ -31,8 +38,15 @@
             type="email"
             required
             class="form-input"
+            :class="{ 'border-red-500 focus:border-red-500': hasFieldError('email') }"
             placeholder="your@email.com"
+            @blur="handleFieldBlur('email')"
           />
+          <div v-if="hasFieldError('email')" class="mt-1 text-sm text-red-600">
+            <div v-for="error in getFieldErrors('email')" :key="error">
+              {{ error }}
+            </div>
+          </div>
         </div>
 
         <div>
@@ -44,10 +58,16 @@
             v-model="form.password"
             type="password"
             required
-            minlength="6"
             class="form-input"
+            :class="{ 'border-red-500 focus:border-red-500': hasFieldError('password') }"
             placeholder="6文字以上のパスワード"
+            @blur="handleFieldBlur('password')"
           />
+          <div v-if="hasFieldError('password')" class="mt-1 text-sm text-red-600">
+            <div v-for="error in getFieldErrors('password')" :key="error">
+              {{ error }}
+            </div>
+          </div>
         </div>
 
         <div>
@@ -60,12 +80,15 @@
             type="password"
             required
             class="form-input"
+            :class="{ 'border-red-500 focus:border-red-500': hasFieldError('confirmPassword') }"
             placeholder="パスワードを再入力"
+            @blur="handleFieldBlur('confirmPassword')"
           />
-        </div>
-
-        <div v-if="passwordMismatch" class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          パスワードが一致しません
+          <div v-if="hasFieldError('confirmPassword')" class="mt-1 text-sm text-red-600">
+            <div v-for="error in getFieldErrors('confirmPassword')" :key="error">
+              {{ error }}
+            </div>
+          </div>
         </div>
 
         <div v-if="authStore.error" class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
@@ -74,8 +97,8 @@
 
         <button
           type="submit"
-          :disabled="authStore.isLoading || passwordMismatch"
-          class="btn-primary w-full"
+          :disabled="authStore.isLoading || !isFormValid"
+          class="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <span v-if="authStore.isLoading">登録中...</span>
           <span v-else>アカウント作成</span>
@@ -92,39 +115,71 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
+import { useFormValidation, validationRules } from '../../composables/useFormValidation'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
-const form = reactive({
+const form = ref({
   name: '',
   email: '',
   password: '',
   confirmPassword: '',
 })
 
-const passwordMismatch = computed(() => {
-  return form.password !== form.confirmPassword && form.confirmPassword.length > 0
-})
+// Form validation rules
+const rules = {
+  name: [
+    validationRules.required('お名前を入力してください'),
+    validationRules.minLength(2, 'お名前は2文字以上で入力してください')
+  ],
+  email: [
+    validationRules.required('メールアドレスを入力してください'),
+    validationRules.email()
+  ],
+  password: [
+    validationRules.required('パスワードを入力してください'),
+    validationRules.minLength(6, 'パスワードは6文字以上で入力してください')
+  ],
+  confirmPassword: [
+    validationRules.required('パスワード確認を入力してください'),
+    validationRules.match(computed(() => form.value.password), 'パスワードが一致しません')
+  ]
+}
+
+const {
+  validateForm,
+  validateField,
+  touchField,
+  getFieldErrors,
+  hasFieldError,
+  isFormValid
+} = useFormValidation(form, rules)
 
 const handleRegister = async () => {
-  if (passwordMismatch.value) {
+  // Validate form before submission
+  if (!validateForm()) {
     return
   }
 
   authStore.clearError()
 
   const success = await authStore.register({
-    name: form.name,
-    email: form.email,
-    password: form.password,
+    name: form.value.name,
+    email: form.value.email,
+    password: form.value.password,
   })
 
   if (success) {
     router.push('/dashboard')
   }
+}
+
+const handleFieldBlur = (fieldName: string) => {
+  touchField(fieldName)
+  validateField(fieldName)
 }
 </script>

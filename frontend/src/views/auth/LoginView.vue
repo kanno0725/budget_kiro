@@ -17,8 +17,15 @@
             type="email"
             required
             class="form-input"
+            :class="{ 'border-red-500 focus:border-red-500': hasFieldError('email') }"
             placeholder="your@email.com"
+            @blur="handleFieldBlur('email')"
           />
+          <div v-if="hasFieldError('email')" class="mt-1 text-sm text-red-600">
+            <div v-for="error in getFieldErrors('email')" :key="error">
+              {{ error }}
+            </div>
+          </div>
         </div>
 
         <div>
@@ -31,8 +38,15 @@
             type="password"
             required
             class="form-input"
+            :class="{ 'border-red-500 focus:border-red-500': hasFieldError('password') }"
             placeholder="パスワードを入力"
+            @blur="handleFieldBlur('password')"
           />
+          <div v-if="hasFieldError('password')" class="mt-1 text-sm text-red-600">
+            <div v-for="error in getFieldErrors('password')" :key="error">
+              {{ error }}
+            </div>
+          </div>
         </div>
 
         <div class="flex items-center">
@@ -53,8 +67,8 @@
 
         <button
           type="submit"
-          :disabled="authStore.isLoading"
-          class="btn-primary w-full"
+          :disabled="authStore.isLoading || !isFormValid"
+          class="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <span v-if="authStore.isLoading">ログイン中...</span>
           <span v-else>ログイン</span>
@@ -71,29 +85,64 @@
 </template>
 
 <script setup lang="ts">
-import { reactive } from 'vue'
-import { useRouter } from 'vue-router'
+import { reactive, ref } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
+import { useFormValidation, validationRules } from '../../composables/useFormValidation'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 
-const form = reactive({
+const form = ref({
   email: '',
   password: '',
   remember: true,
 })
 
+// Form validation rules
+const rules = {
+  email: [
+    validationRules.required('メールアドレスを入力してください'),
+    validationRules.email()
+  ],
+  password: [
+    validationRules.required('パスワードを入力してください'),
+    validationRules.minLength(6, 'パスワードは6文字以上で入力してください')
+  ]
+}
+
+const {
+  validateForm,
+  validateField,
+  touchField,
+  getFieldErrors,
+  hasFieldError,
+  isFormValid
+} = useFormValidation(form, rules)
+
 const handleLogin = async () => {
+  // Validate form before submission
+  if (!validateForm()) {
+    return
+  }
+
   authStore.clearError()
 
   const success = await authStore.login({
-    email: form.email,
-    password: form.password,
+    email: form.value.email,
+    password: form.value.password,
   })
 
   if (success) {
-    router.push('/dashboard')
+    // Redirect to the intended page or dashboard
+    const redirectPath = (route.query.redirect as string) || '/dashboard'
+    router.push(redirectPath)
   }
+}
+
+const handleFieldBlur = (fieldName: string) => {
+  touchField(fieldName)
+  validateField(fieldName)
 }
 </script>

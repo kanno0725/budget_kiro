@@ -14,6 +14,8 @@ export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(localStorage.getItem('auth_token'))
   const isLoading = ref(false)
   const error = ref<string | null>(null)
+  const lastActivity = ref<number>(Date.now())
+  const sessionTimeout = 30 * 60 * 1000 // 30 minutes in milliseconds
 
   // Getters
   const isAuthenticated = computed(() => !!token.value && !!user.value)
@@ -30,6 +32,7 @@ export const useAuthStore = defineStore('auth', () => {
         user.value = response.data.data.user
         token.value = response.data.data.token
         localStorage.setItem('auth_token', token.value)
+        updateActivity()
         return true
       } else {
         error.value = response.data.error?.message || 'Login failed'
@@ -54,12 +57,13 @@ export const useAuthStore = defineStore('auth', () => {
         user.value = response.data.data.user
         token.value = response.data.data.token
         localStorage.setItem('auth_token', token.value)
+        updateActivity()
         return true
       } else {
         error.value = response.data.error?.message || 'Registration failed'
         return false
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       error.value = err.response?.data?.error?.message || 'Registration failed'
       return false
     } finally {
@@ -85,17 +89,52 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
   }
 
+  // Update last activity timestamp
+  const updateActivity = () => {
+    lastActivity.value = Date.now()
+  }
+
+  // Check if session has expired
+  const isSessionExpired = () => {
+    if (!token.value) return false
+    return Date.now() - lastActivity.value > sessionTimeout
+  }
+
+  // Auto logout on session timeout
+  const checkSessionTimeout = () => {
+    if (isAuthenticated.value && isSessionExpired()) {
+      logout()
+      error.value = 'セッションがタイムアウトしました。再度ログインしてください。'
+    }
+  }
+
+  // Start session timeout checker
+  const startSessionChecker = () => {
+    // Check session every minute
+    setInterval(checkSessionTimeout, 60 * 1000)
+
+    // Update activity on user interactions
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart']
+    events.forEach(event => {
+      document.addEventListener(event, updateActivity, true)
+    })
+  }
+
   // Initialize user from token if available
   const initializeAuth = async () => {
     if (token.value) {
-      // In a real app, you might want to validate the token with the server
-      // For now, we'll assume the token is valid if it exists
       try {
-        // You could add a /auth/me endpoint to get current user info
-        // const response = await apiService.auth.me()
-        // user.value = response.data.data
+        // Try to get current user info to validate token
+        const response = await apiService.auth.me()
+        if (response.data.success && response.data.data) {
+          user.value = response.data.data
+        } else {
+          // Token is invalid, clear it
+          logout()
+        }
       } catch (err) {
-        // Token is invalid, clear it
+        // Token is invalid or network error, clear it
+        console.error('Token validation failed:', err)
         logout()
       }
     }
@@ -107,6 +146,7 @@ export const useAuthStore = defineStore('auth', () => {
     token,
     isLoading,
     error,
+    lastActivity,
     // Getters
     isAuthenticated,
     // Actions
@@ -115,5 +155,9 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     clearError,
     initializeAuth,
+    updateActivity,
+    isSessionExpired,
+    checkSessionTimeout,
+    startSessionChecker,
   }
 })
