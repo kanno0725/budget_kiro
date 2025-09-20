@@ -1,4 +1,4 @@
-import { ref, computed, type Ref } from 'vue'
+import { computed } from 'vue'
 import {
   Chart as ChartJS,
   CategoryScale,

@@ -1,51 +1,30 @@
 <template>
   <div class="min-h-screen bg-gray-50">
-    <nav class="bg-white shadow-sm border-b">
-      <div class="container mx-auto px-4">
-        <div class="flex justify-between items-center h-16">
-          <div class="flex items-center space-x-4">
-            <router-link to="/dashboard" class="text-gray-600 hover:text-gray-900">
-              ← ダッシュボード
-            </router-link>
-            <h1 class="text-xl font-semibold text-gray-900">グループ管理</h1>
-          </div>
-          <div class="flex space-x-2">
-            <button class="btn-secondary">
-              グループに参加
-            </button>
-            <button class="btn-primary">
-              新しいグループ
-            </button>
-          </div>
-        </div>
-      </div>
-    </nav>
-
     <div class="container mx-auto px-4 py-8">
-      <div class="grid md:grid-cols-2 gap-6">
-        <div class="card">
-          <h2 class="text-lg font-semibold text-gray-900 mb-4">参加中のグループ</h2>
-          <div class="text-center py-8 text-gray-500">
-            参加中のグループがありません
-            <br />
-            <span class="text-sm">新しいグループを作成するか、招待リンクで参加してください</span>
-          </div>
-        </div>
-
-        <div class="card">
-          <h2 class="text-lg font-semibold text-gray-900 mb-4">共同出費</h2>
-          <div class="text-center py-8 text-gray-500">
-            共同出費がありません
-            <br />
-            <span class="text-sm">グループに参加して共同出費を記録してください</span>
-          </div>
-        </div>
+      <!-- Page Header -->
+      <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-900">グループ管理</h1>
+        <button class="btn-primary">
+          <span class="mr-2">+</span>
+          新しいグループ
+        </button>
       </div>
 
-      <div class="mt-6 card">
-        <h2 class="text-lg font-semibold text-gray-900 mb-4">メンバー残高</h2>
-        <div class="text-center py-8 text-gray-500">
-          残高情報がありません
+      <!-- Coming Soon Message -->
+      <div class="card text-center py-12">
+        <div class="text-6xl mb-4">👥</div>
+        <h2 class="text-2xl font-semibold text-gray-900 mb-2">グループ管理機能</h2>
+        <p class="text-gray-600 mb-6">
+          家族やルームメイトとの共同出費管理機能を準備中です
+        </p>
+        <div class="text-sm text-gray-500">
+          実装予定の機能：
+          <ul class="mt-2 space-y-1">
+            <li>• グループ作成・招待</li>
+            <li>• 共同出費の記録</li>
+            <li>• 費用分担の計算</li>
+            <li>• 精算機能</li>
+          </ul>
         </div>
       </div>
     </div>
@@ -61,6 +40,7 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 onMounted(() => {
+  // Redirect to login if not authenticated
   if (!authStore.isAuthenticated) {
     router.push('/login')
   }

@@ -69,8 +69,18 @@
           type="submit"
           :disabled="authStore.isLoading || !isFormValid"
           class="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+          :class="{ 'bg-green-600 hover:bg-green-700': loginSuccess }"
         >
-          <span v-if="authStore.isLoading">ログイン中...</span>
+          <span v-if="authStore.isLoading">
+            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            ログイン中...
+          </span>
+          <span v-else-if="loginSuccess">
+            ✓ ログイン成功！
+          </span>
           <span v-else>ログイン</span>
         </button>
       </form>
@@ -100,6 +110,9 @@ const form = ref({
   remember: true,
 })
 
+const loginSuccess = ref(false)
+const immediateRedirect = ref(false) // Option for immediate redirect
+
 // Form validation rules
 const rules = {
   email: [
@@ -127,7 +140,8 @@ const handleLogin = async () => {
     return
   }
 
-  authStore.clearError()
+  const redirectPath = (route.query.redirect as string) || '/dashboard'
+  const immediate = route.query.immediate === 'true' || immediateRedirect.value
 
   const success = await authStore.login({
     email: form.value.email,
@@ -135,9 +149,28 @@ const handleLogin = async () => {
   })
 
   if (success) {
-    // Redirect to the intended page or dashboard
-    const redirectPath = (route.query.redirect as string) || '/dashboard'
-    router.push(redirectPath)
+    // Show success message briefly
+    loginSuccess.value = true
+    authStore.clearError()
+
+    // Perform navigation
+    const performNavigation = () => {
+      router.push(redirectPath).catch((error) => {
+        console.error('Navigation error:', error)
+        // Fallback to dashboard if redirect fails
+        router.push('/dashboard')
+      })
+    }
+
+    // Check if immediate redirect is requested or add delay for UX
+    if (immediate) {
+      performNavigation()
+    } else {
+      // Add a small delay to show success state
+      setTimeout(performNavigation, 1000)
+    }
+  } else {
+    loginSuccess.value = false
   }
 }
 

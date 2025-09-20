@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useAuthStore } from './stores/auth'
+import AppLayout from './components/layout/AppLayout.vue'
 
 const authStore = useAuthStore()
 
@@ -12,7 +13,9 @@ onMounted(() => {
 
 <template>
   <div id="app">
-    <router-view />
+    <AppLayout>
+      <router-view />
+    </AppLayout>
   </div>
 </template>
 

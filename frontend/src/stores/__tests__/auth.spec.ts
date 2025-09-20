@@ -42,7 +42,7 @@ describe('Auth Store', () => {
         success: true,
         data: {
           user: { id: '1', email: 'test@example.com', name: 'Test User' },
-          token: 'mock-token'
+          accessToken: 'mock-access-token'
         }
       }
     })
@@ -58,9 +58,9 @@ describe('Auth Store', () => {
       email: 'test@example.com',
       name: 'Test User'
     })
-    expect(authStore.token).toBe('mock-token')
+    expect(authStore.accessToken).toBe('mock-access-token')
     expect(authStore.isAuthenticated).toBe(true)
-    expect(localStorageMock.setItem).toHaveBeenCalledWith('auth_token', 'mock-token')
+    expect(localStorageMock.setItem).toHaveBeenCalledWith('auth_token', 'mock-access-token')
   })
 
   it('should handle login failure', async () => {
@@ -81,7 +81,7 @@ describe('Auth Store', () => {
 
     expect(result).toBe(false)
     expect(authStore.user).toBe(null)
-    expect(authStore.token).toBe(null)
+    expect(authStore.accessToken).toBe(null)
     expect(authStore.isAuthenticated).toBe(false)
     expect(authStore.error).toBe('Invalid credentials')
   })
@@ -95,7 +95,7 @@ describe('Auth Store', () => {
         success: true,
         data: {
           user: { id: '1', email: 'test@example.com', name: 'Test User' },
-          token: 'mock-token'
+          accessToken: 'mock-access-token'
         }
       }
     })
@@ -112,7 +112,7 @@ describe('Auth Store', () => {
       email: 'test@example.com',
       name: 'Test User'
     })
-    expect(authStore.token).toBe('mock-token')
+    expect(authStore.accessToken).toBe('mock-access-token')
     expect(authStore.isAuthenticated).toBe(true)
   })
 
@@ -121,12 +121,12 @@ describe('Auth Store', () => {
 
     // Set initial authenticated state
     authStore.user = { id: '1', email: 'test@example.com', name: 'Test User' }
-    authStore.token = 'mock-token'
+    authStore.accessToken = 'mock-access-token'
 
     await authStore.logout()
 
     expect(authStore.user).toBe(null)
-    expect(authStore.token).toBe(null)
+    expect(authStore.accessToken).toBe(null)
     expect(authStore.isAuthenticated).toBe(false)
     expect(localStorageMock.removeItem).toHaveBeenCalledWith('auth_token')
   })
@@ -136,7 +136,7 @@ describe('Auth Store', () => {
 
     // Set authenticated state with old activity
     authStore.user = { id: '1', email: 'test@example.com', name: 'Test User' }
-    authStore.token = 'mock-token'
+    authStore.accessToken = 'mock-access-token'
     authStore.lastActivity = Date.now() - (31 * 60 * 1000) // 31 minutes ago
 
     expect(authStore.isSessionExpired()).toBe(true)

@@ -11,14 +11,14 @@ export interface User {
 export const useAuthStore = defineStore('auth', () => {
   // State
   const user = ref<User | null>(null)
-  const token = ref<string | null>(localStorage.getItem('auth_token'))
+  const accessToken = ref<string | null>(localStorage.getItem('auth_token'))
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   const lastActivity = ref<number>(Date.now())
   const sessionTimeout = 30 * 60 * 1000 // 30 minutes in milliseconds
 
   // Getters
-  const isAuthenticated = computed(() => !!token.value && !!user.value)
+  const isAuthenticated = computed(() => !!accessToken.value && !!user.value)
 
   // Actions
   const login = async (credentials: { email: string; password: string }) => {
@@ -30,15 +30,15 @@ export const useAuthStore = defineStore('auth', () => {
 
       if (response.data.success && response.data.data) {
         user.value = response.data.data.user
-        token.value = response.data.data.token
-        localStorage.setItem('auth_token', token.value)
+        accessToken.value = response.data.data.accessToken
+        localStorage.setItem('auth_token', accessToken.value)
         updateActivity()
         return true
       } else {
         error.value = response.data.error?.message || 'Login failed'
         return false
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       error.value = err.response?.data?.error?.message || 'Login failed'
       return false
     } finally {
@@ -55,8 +55,8 @@ export const useAuthStore = defineStore('auth', () => {
 
       if (response.data.success && response.data.data) {
         user.value = response.data.data.user
-        token.value = response.data.data.token
-        localStorage.setItem('auth_token', token.value)
+        accessToken.value = response.data.data.accessToken
+        localStorage.setItem('auth_token', accessToken.value)
         updateActivity()
         return true
       } else {
@@ -73,14 +73,14 @@ export const useAuthStore = defineStore('auth', () => {
 
   const logout = async () => {
     try {
-      if (token.value) {
+      if (accessToken.value) {
         await apiService.auth.logout()
       }
     } catch (err) {
       console.error('Logout error:', err)
     } finally {
       user.value = null
-      token.value = null
+      accessToken.value = null
       localStorage.removeItem('auth_token')
     }
   }
@@ -96,7 +96,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   // Check if session has expired
   const isSessionExpired = () => {
-    if (!token.value) return false
+    if (!accessToken.value) return false
     return Date.now() - lastActivity.value > sessionTimeout
   }
 
@@ -120,21 +120,21 @@ export const useAuthStore = defineStore('auth', () => {
     })
   }
 
-  // Initialize user from token if available
+  // Initialize user from accessToken if available
   const initializeAuth = async () => {
-    if (token.value) {
+    if (accessToken.value) {
       try {
-        // Try to get current user info to validate token
+        // Try to get current user info to validate accessToken
         const response = await apiService.auth.me()
         if (response.data.success && response.data.data) {
           user.value = response.data.data
         } else {
-          // Token is invalid, clear it
+          // AccessToken is invalid, clear it
           logout()
         }
       } catch (err) {
-        // Token is invalid or network error, clear it
-        console.error('Token validation failed:', err)
+        // AccessToken is invalid or network error, clear it
+        console.error('AccessToken validation failed:', err)
         logout()
       }
     }
@@ -143,7 +143,7 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     // State
     user,
-    token,
+    accessToken,
     isLoading,
     error,
     lastActivity,

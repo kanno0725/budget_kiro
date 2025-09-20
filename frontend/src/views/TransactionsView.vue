@@ -1,23 +1,14 @@
 <template>
   <div class="min-h-screen bg-gray-50">
-    <!-- Navigation -->
-    <nav class="bg-white shadow-sm border-b">
-      <div class="container mx-auto px-4">
-        <div class="flex justify-between items-center h-16">
-          <div class="flex items-center space-x-4">
-            <router-link to="/dashboard" class="text-gray-600 hover:text-gray-900">
-              ← ダッシュボード
-            </router-link>
-            <h1 class="text-xl font-semibold text-gray-900">取引管理</h1>
-          </div>
-          <button @click="showCreateForm = true" class="btn-primary">
-            新しい取引
-          </button>
-        </div>
-      </div>
-    </nav>
-
     <div class="container mx-auto px-4 py-8">
+      <!-- Page Header -->
+      <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-900">取引管理</h1>
+        <button @click="showCreateForm = true" class="btn-primary">
+          <span class="mr-2">+</span>
+          新しい取引
+        </button>
+      </div>
       <!-- Transaction Form Modal -->
       <div
         v-if="showCreateForm || editingTransaction"
