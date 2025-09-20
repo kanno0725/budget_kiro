@@ -5,6 +5,8 @@ import { JoinGroupDto } from './dto/join-group.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { CreateSharedExpenseDto, SplitType } from './dto/create-shared-expense.dto';
 import { SplitEquallyDto } from './dto/split-equally.dto';
+import { SettlementConfirmationDto } from './dto/settlement-confirmation.dto';
+import { SettlementPreviewDto } from './dto/settlement-preview.dto';
 import { GroupRole } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { Decimal } from '@prisma/client/runtime/library';
@@ -514,85 +516,21 @@ export class GroupsService {
   }
 
   async splitEqually(groupId: string, splitEquallyDto: SplitEquallyDto, userId: string) {
-    // Verify user has access to this group and is admin
-    const currentUserMember = await this.prisma.groupMember.findFirst({
-      where: {
-        groupId,
-        userId,
-        role: GroupRole.ADMIN
-      }
-    });
+    // This method is deprecated in favor of executeSettlement
+    // Redirect to the new enhanced settlement method
+    const settlementConfirmation: SettlementConfirmationDto = {
+      confirmed: true,
+      userIds: splitEquallyDto.userIds
+    };
 
-    if (!currentUserMember) {
-      throw new ForbiddenException('Only group admins can perform equal split settlements');
-    }
-
-    // Validate that all user IDs are members of the group
-    const members = await this.getMembers(groupId, userId);
-    const memberIds = members.map(m => m.userId);
+    const result = await this.executeSettlement(groupId, settlementConfirmation, userId);
     
-    for (const splitUserId of splitEquallyDto.userIds) {
-      if (!memberIds.includes(splitUserId)) {
-        throw new BadRequestException(`User ${splitUserId} is not a member of this group`);
-      }
-    }
-
-    // Get current balances for the specified users
-    const balances = await this.prisma.groupBalance.findMany({
-      where: {
-        groupId,
-        userId: {
-          in: splitEquallyDto.userIds
-        }
-      }
-    });
-
-    // Calculate total balance and equal share
-    const totalBalance = balances.reduce((sum, balance) => sum.add(balance.balance), new Decimal(0));
-    const equalShare = totalBalance.div(splitEquallyDto.userIds.length);
-
-    // Create settlements and update balances in a transaction
-    const result = await this.prisma.$transaction(async (prisma) => {
-      const settlements = [];
-
-      for (const balance of balances) {
-        const difference = balance.balance.sub(equalShare);
-        
-        if (!difference.equals(0)) {
-          // Update balance to equal share
-          await prisma.groupBalance.update({
-            where: {
-              id: balance.id
-            },
-            data: {
-              balance: equalShare
-            }
-          });
-
-          // Create settlement record
-          if (difference.gt(0)) {
-            // This user owes money to others
-            const settlement = await prisma.settlement.create({
-              data: {
-                fromId: balance.userId,
-                toId: userId, // Settlement coordinator (admin)
-                amount: difference,
-                groupId: groupId
-              }
-            });
-            settlements.push(settlement);
-          }
-        }
-      }
-
-      return settlements;
-    });
-
+    // Return in the old format for backward compatibility
     return {
-      success: true,
-      message: 'Equal split settlement completed successfully',
-      settlements: result,
-      equalShare: equalShare
+      success: result.success,
+      message: result.message,
+      settlements: result.data.settlements,
+      equalShare: result.data.summary.equalShare
     };
   }
 
@@ -619,6 +557,258 @@ export class GroupsService {
     });
 
     return settlements;
+  }
+
+  async previewSettlement(groupId: string, settlementPreviewDto: SettlementPreviewDto, userId: string) {
+    // Verify user has access to this group and is admin
+    const currentUserMember = await this.prisma.groupMember.findFirst({
+      where: {
+        groupId,
+        userId,
+        role: GroupRole.ADMIN
+      }
+    });
+
+    if (!currentUserMember) {
+      throw new ForbiddenException('Only group admins can preview settlements');
+    }
+
+    // Determine which users to include in settlement
+    let targetUserIds: string[];
+    if (settlementPreviewDto.userIds && settlementPreviewDto.userIds.length > 0) {
+      targetUserIds = settlementPreviewDto.userIds;
+    } else {
+      // Include all group members if no specific users provided
+      const members = await this.getMembers(groupId, userId);
+      targetUserIds = members.map(m => m.userId);
+    }
+
+    // Validate that all user IDs are members of the group
+    const members = await this.getMembers(groupId, userId);
+    const memberIds = members.map(m => m.userId);
+    
+    for (const targetUserId of targetUserIds) {
+      if (!memberIds.includes(targetUserId)) {
+        throw new BadRequestException(`User ${targetUserId} is not a member of this group`);
+      }
+    }
+
+    // Get current balances for the specified users
+    const balances = await this.prisma.groupBalance.findMany({
+      where: {
+        groupId,
+        userId: {
+          in: targetUserIds
+        }
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    // Calculate total balance and equal share
+    const totalBalance = balances.reduce((sum, balance) => sum.add(balance.balance), new Decimal(0));
+    const equalShare = totalBalance.div(targetUserIds.length);
+
+    // Calculate what each user would owe or receive
+    const settlementPreview = balances.map(balance => {
+      const difference = balance.balance.sub(equalShare);
+      return {
+        user: balance.user,
+        currentBalance: balance.balance,
+        targetBalance: equalShare,
+        adjustment: difference.neg(), // Negative means they owe, positive means they receive
+        willOwe: difference.gt(0) ? difference : new Decimal(0),
+        willReceive: difference.lt(0) ? difference.neg() : new Decimal(0)
+      };
+    });
+
+    return {
+      totalBalance,
+      equalShare,
+      participantCount: targetUserIds.length,
+      settlementPreview,
+      summary: {
+        totalOwed: settlementPreview.reduce((sum, item) => sum.add(item.willOwe), new Decimal(0)),
+        totalToReceive: settlementPreview.reduce((sum, item) => sum.add(item.willReceive), new Decimal(0))
+      }
+    };
+  }
+
+  async executeSettlement(groupId: string, settlementConfirmationDto: SettlementConfirmationDto, userId: string) {
+    if (!settlementConfirmationDto.confirmed) {
+      throw new BadRequestException('Settlement must be confirmed to proceed');
+    }
+
+    // Verify user has access to this group and is admin
+    const currentUserMember = await this.prisma.groupMember.findFirst({
+      where: {
+        groupId,
+        userId,
+        role: GroupRole.ADMIN
+      }
+    });
+
+    if (!currentUserMember) {
+      throw new ForbiddenException('Only group admins can execute settlements');
+    }
+
+    // Determine which users to include in settlement
+    let targetUserIds: string[];
+    if (settlementConfirmationDto.userIds && settlementConfirmationDto.userIds.length > 0) {
+      targetUserIds = settlementConfirmationDto.userIds;
+    } else {
+      // Include all group members if no specific users provided
+      const members = await this.getMembers(groupId, userId);
+      targetUserIds = members.map(m => m.userId);
+    }
+
+    // Validate that all user IDs are members of the group
+    const members = await this.getMembers(groupId, userId);
+    const memberIds = members.map(m => m.userId);
+    
+    for (const targetUserId of targetUserIds) {
+      if (!memberIds.includes(targetUserId)) {
+        throw new BadRequestException(`User ${targetUserId} is not a member of this group`);
+      }
+    }
+
+    // Get current balances for the specified users
+    const balances = await this.prisma.groupBalance.findMany({
+      where: {
+        groupId,
+        userId: {
+          in: targetUserIds
+        }
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    // Calculate total balance and equal share
+    const totalBalance = balances.reduce((sum, balance) => sum.add(balance.balance), new Decimal(0));
+    const equalShare = totalBalance.div(targetUserIds.length);
+
+    // Execute settlement in a transaction
+    const result = await this.prisma.$transaction(async (prisma) => {
+      const settlements = [];
+      const updatedBalances = [];
+
+      // Calculate who owes and who receives
+      const debtors = [];
+      const creditors = [];
+
+      for (const balance of balances) {
+        const difference = balance.balance.sub(equalShare);
+        
+        if (difference.gt(0)) {
+          // This user has excess money (creditor)
+          creditors.push({
+            userId: balance.userId,
+            user: balance.user,
+            amount: difference
+          });
+        } else if (difference.lt(0)) {
+          // This user owes money (debtor)
+          debtors.push({
+            userId: balance.userId,
+            user: balance.user,
+            amount: difference.neg()
+          });
+        }
+
+        // Update balance to equal share
+        const updatedBalance = await prisma.groupBalance.update({
+          where: {
+            id: balance.id
+          },
+          data: {
+            balance: equalShare
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            }
+          }
+        });
+        updatedBalances.push(updatedBalance);
+      }
+
+      // Create settlement records for money transfers
+      for (const debtor of debtors) {
+        let remainingDebt = debtor.amount;
+        
+        for (const creditor of creditors) {
+          if (remainingDebt.lte(0) || creditor.amount.lte(0)) continue;
+          
+          const transferAmount = remainingDebt.lt(creditor.amount) ? remainingDebt : creditor.amount;
+          
+          // Create settlement record
+          const settlement = await prisma.settlement.create({
+            data: {
+              fromId: debtor.userId,
+              toId: creditor.userId,
+              amount: transferAmount,
+              groupId: groupId
+            },
+            include: {
+              from: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true
+                }
+              }
+            }
+          });
+          settlements.push(settlement);
+          
+          // Update remaining amounts
+          remainingDebt = remainingDebt.sub(transferAmount);
+          creditor.amount = creditor.amount.sub(transferAmount);
+        }
+      }
+
+      return {
+        settlements,
+        updatedBalances,
+        totalBalance,
+        equalShare,
+        participantCount: targetUserIds.length
+      };
+    });
+
+    return {
+      success: true,
+      message: 'Settlement executed successfully',
+      data: {
+        settlements: result.settlements,
+        updatedBalances: result.updatedBalances,
+        summary: {
+          totalBalance: result.totalBalance,
+          equalShare: result.equalShare,
+          participantCount: result.participantCount,
+          settlementsCreated: result.settlements.length
+        }
+      }
+    };
   }
 
   private async validateExpenseSplits(groupId: string, createSharedExpenseDto: CreateSharedExpenseDto) {

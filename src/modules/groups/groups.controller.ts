@@ -25,6 +25,8 @@ import { JoinGroupDto } from "./dto/join-group.dto";
 import { UpdateMemberRoleDto } from "./dto/update-member-role.dto";
 import { CreateSharedExpenseDto } from "./dto/create-shared-expense.dto";
 import { SplitEquallyDto } from "./dto/split-equally.dto";
+import { SettlementConfirmationDto } from "./dto/settlement-confirmation.dto";
+import { SettlementPreviewDto } from "./dto/settlement-preview.dto";
 
 @ApiTags("Groups")
 @ApiBearerAuth("JWT-auth")
@@ -431,5 +433,132 @@ export class GroupsController {
       success: true,
       data: settlements
     };
+  }
+
+  @Post(":id/settlement-preview")
+  @ApiOperation({ summary: "Preview settlement calculation (Admin only)" })
+  @ApiParam({ name: "id", description: "Group ID" })
+  @ApiBody({ type: SettlementPreviewDto })
+  @ApiResponse({
+    status: 200,
+    description: "Settlement preview calculated successfully",
+    schema: {
+      example: {
+        success: true,
+        data: {
+          totalBalance: 100.00,
+          equalShare: 33.33,
+          participantCount: 3,
+          settlementPreview: [
+            {
+              user: {
+                id: "user_id",
+                name: "John Doe",
+                email: "john@example.com"
+              },
+              currentBalance: 50.00,
+              targetBalance: 33.33,
+              adjustment: -16.67,
+              willOwe: 16.67,
+              willReceive: 0
+            }
+          ],
+          summary: {
+            totalOwed: 33.34,
+            totalToReceive: 33.34
+          }
+        }
+      }
+    }
+  })
+  @ApiResponse({
+    status: 403,
+    description: "Only group admins can preview settlements"
+  })
+  async previewSettlement(
+    @Param("id") id: string,
+    @Body() settlementPreviewDto: SettlementPreviewDto,
+    @Request() req
+  ) {
+    const preview = await this.groupsService.previewSettlement(
+      id,
+      settlementPreviewDto,
+      req.user.id
+    );
+    return {
+      success: true,
+      data: preview
+    };
+  }
+
+  @Post(":id/execute-settlement")
+  @ApiOperation({ summary: "Execute settlement with confirmation (Admin only)" })
+  @ApiParam({ name: "id", description: "Group ID" })
+  @ApiBody({ type: SettlementConfirmationDto })
+  @ApiResponse({
+    status: 200,
+    description: "Settlement executed successfully",
+    schema: {
+      example: {
+        success: true,
+        message: "Settlement executed successfully",
+        data: {
+          settlements: [
+            {
+              id: "settlement_id",
+              fromId: "user1",
+              toId: "user2",
+              amount: 16.67,
+              groupId: "group_id",
+              createdAt: "2024-01-01T00:00:00.000Z",
+              from: {
+                id: "user1",
+                name: "John Doe",
+                email: "john@example.com"
+              }
+            }
+          ],
+          updatedBalances: [
+            {
+              id: "balance_id",
+              userId: "user1",
+              groupId: "group_id",
+              balance: 33.33,
+              user: {
+                id: "user1",
+                name: "John Doe",
+                email: "john@example.com"
+              }
+            }
+          ],
+          summary: {
+            totalBalance: 100.00,
+            equalShare: 33.33,
+            participantCount: 3,
+            settlementsCreated: 2
+          }
+        }
+      }
+    }
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Settlement must be confirmed or invalid data"
+  })
+  @ApiResponse({
+    status: 403,
+    description: "Only group admins can execute settlements"
+  })
+  async executeSettlement(
+    @Param("id") id: string,
+    @Body() settlementConfirmationDto: SettlementConfirmationDto,
+    @Request() req
+  ) {
+    const result = await this.groupsService.executeSettlement(
+      id,
+      settlementConfirmationDto,
+      req.user.id
+    );
+    return result;
   }
 }
